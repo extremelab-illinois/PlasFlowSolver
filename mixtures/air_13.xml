@@ -1,0 +1,13 @@
+<!-- Ionized 13 species air mixture -->
+<mixture mechanism="air13_Park" use_transport="yes" state_model="EquilTP" thermo_db="NASA-7" thermal_conductivity="Wilke" viscosity="Gupta-Yos">
+
+    <species>
+        e- N+ O+ NO+ N2+ O2+ N O NO N2 O2 Ar+ Ar
+    </species>
+
+    <element_compositions default="air">
+        <composition name="air"> N:0.78084, O: 0.20946, Ar:0.00934 </composition>
+    </element_compositions>
+
+</mixture>
+

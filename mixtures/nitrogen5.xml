@@ -1,0 +1,10 @@
+<!-- Nitrogen with 5 components-->
+<mixture state_model="EquilTP" >
+    <species>
+        N2 N2+ N N+ e-
+    </species>
+
+    <element_compositions default="nitrogen_default">
+        <composition name="nitrogen_default"> N2:1.0, N2+:0.0, N:0.0, N+:0.0, e-:0.0 </composition>
+    </element_compositions>
+</mixture>

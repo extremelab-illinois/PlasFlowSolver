@@ -1,0 +1,16 @@
+<!--
+Nitrogen2 reactions mechanism
+-->
+<mechanism name="nitrogen2_std">
+
+    <arrhenius_units A="mol,cm,s,K" E="kcal,mol,K" />
+    
+    <reaction formula="N2+N=2N+N">
+        <arrhenius A="4.085E+22" n="-1.5" T="113000.0" />
+    </reaction>
+    <reaction formula="N2+N2=2N+N2">
+        <arrhenius A="4.7E+17" n="-0.5" T="113000.0" />
+    </reaction>
+</mechanism>
+
+

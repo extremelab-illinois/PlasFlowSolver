@@ -1,0 +1,11 @@
+<!-- Nitrogen 2 mixture -->
+<mixture state_model="EquilTP" thermo_db="RRHO" thermal_conductivity="Chapmann-Enskog_LDLT" viscosity="Chapmann-Enskog_LDLT">
+    <species>
+        N 
+    </species>
+
+    <element_compositions default="nitrogen1">
+        <composition name="nitrogen1"> N:1.00 </composition>
+    </element_compositions>
+
+</mixture>

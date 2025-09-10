@@ -1,0 +1,5 @@
+__pycache__/*.pyc
+heat_flux/__pycache__/*.pyc
+IO_operations/__pycache__/*.pyc
+system_resolution/__pycache__/*.pyc
+utils/__pycache__/*.pyc
