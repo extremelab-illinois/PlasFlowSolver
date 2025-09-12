@@ -24,9 +24,6 @@ This software is open source and free.
 It is distributed under the terms of the **GNU General Public License v3.0** (GPLv3) 
 and the **GNU Lesser General Public License v3.0** (LGPLv3).  
 
-- The main application code is released under the [GPLv3](COPYING).  
-- The library components are released under the [LGPLv3](COPYING.LESSER).  
-
 © 2023-2025 The Board of Trustees of the University of Illinois. All rights reserved.
 
 ## Citing PlasFlowSolver
