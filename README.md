@@ -31,7 +31,7 @@ and the **GNU Lesser General Public License v3.0** (LGPLv3).
 
 ## Citing PlasFlowSolver
 
-Please cite the following article when mentioning Mutation++ in your own papers.
+Please cite the following article when mentioning PlasFlowSolver in your own papers.
 
 * Lanza et al. [PlasFlowSolver: An Aerothermodynamic Data Reduction Model for Inductively Coupled Plasma Wind Tunnel Facilities](https://arc.aiaa.org/doi/abs/10.2514/6.2025-0449) *AIAA SciTech 2025 Conference*.
 
