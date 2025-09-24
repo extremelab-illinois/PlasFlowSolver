@@ -1,0 +1,183 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]   # Unix-like only
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    env:
+      # Mutation++ locations
+      MPP_SRC: ${{ github.workspace }}/Mutationpp
+      MPP_BUILD: ${{ github.workspace }}/build_mpp
+      MPP_PREFIX: ${{ github.workspace }}/thirdparty
+      CMAKE_BUILD_TYPE: Release
+
+      # Make binary wheels preferred for speed (retry falls back to source)
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_ONLY_BINARY: ":all:"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            **/requirements.txt
+
+      - name: Tool versions (debug)
+        run: |
+          python -V
+          pip -V
+          cmake --version || true
+          ninja --version || true
+
+      # ---- Build tools ----
+      - name: Install build tools (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ pkg-config
+
+      - name: Install build tools (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew update
+          brew install cmake ninja || true
+
+      # ---- Fetch Mutation++ source ----
+      - name: Clone Mutation++
+        run: |
+          git clone --depth 1 https://github.com/mutationpp/Mutationpp.git "${MPP_SRC}"
+
+      - name: Get Mutation++ commit hash
+        id: mppsha
+        run: echo "mpp_sha=$(git -C "${MPP_SRC}" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # ---- Cache the Mutation++ install prefix ----
+      - name: Cache Mutation++ install
+        id: cache-mpp
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.MPP_PREFIX }}
+          key: ${{ runner.os }}-mpp-${{ steps.mppsha.outputs.mpp_sha }}-${{ env.CMAKE_BUILD_TYPE }}
+
+      # ---- Build & install Mutation++ (C++) if cache missed ----
+      - name: Build & install Mutation++ (C++)
+        if: steps.cache-mpp.outputs.cache-hit != 'true'
+        run: |
+          cmake -S "${MPP_SRC}" -B "${MPP_BUILD}" \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" \
+            -DCMAKE_INSTALL_PREFIX="${MPP_PREFIX}"
+          cmake --build "${MPP_BUILD}" --config "${CMAKE_BUILD_TYPE}" --target install -- -v
+
+      # ---- Export Mutation++ env + runtime library paths ----
+      - name: Configure Mutation++ environment
+        shell: bash
+        run: |
+          echo "MPP_DIRECTORY=${MPP_SRC}" >> "$GITHUB_ENV"
+          echo "MPP_DATA_DIRECTORY=${MPP_SRC}/data" >> "$GITHUB_ENV"
+          echo "PATH=${MPP_PREFIX}/bin:${PATH}" >> "$GITHUB_ENV"
+
+          if [[ -d "${MPP_PREFIX}/lib64" ]]; then LIBDIR=lib64; else LIBDIR=lib; fi
+          echo "MPP_LIBDIR=${LIBDIR}" >> "$GITHUB_ENV"
+
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            echo "LD_LIBRARY_PATH=${MPP_PREFIX}/${LIBDIR}:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+            echo "PKG_CONFIG_PATH=${MPP_PREFIX}/${LIBDIR}/pkgconfig:${PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          else
+            echo "DYLD_LIBRARY_PATH=${MPP_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+            echo "PKG_CONFIG_PATH=${MPP_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          fi
+
+          # Help build systems find installed Mutation++ headers/libs
+          echo "CMAKE_PREFIX_PATH=${MPP_PREFIX}:${CMAKE_PREFIX_PATH}" >> "$GITHUB_ENV"
+
+      - name: Print Mutation++ env (debug)
+        run: |
+          echo "MPP_DIRECTORY=$MPP_DIRECTORY"
+          echo "MPP_DATA_DIRECTORY=$MPP_DATA_DIRECTORY"
+          echo "Using libdir: $MPP_LIBDIR"
+          echo "PATH=$PATH"
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+          else
+            echo "DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH"
+          fi
+          echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH"
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+
+      # ---- Python tooling (wheel build helpers) ----
+      - name: Upgrade pip, setuptools, wheel
+        run: python -m pip install -U pip setuptools wheel
+
+      # ---- Install Mutation++ Python package (editable) ----
+      # Do this BEFORE your requirements, so Mutation++ headers/libs are present
+      # and bindings can resolve them. We still exclude mutationpp from the later requirements step.
+      - name: Install Mutation++ Python bindings
+        run: |
+          pip install -e "${MPP_SRC}"
+
+      # ---- Install your requirements (excluding mutationpp pin) ----
+      - name: Install Python dependencies (requirements.txt minus mutationpp)
+        shell: bash
+        run: |
+          # Filter out any 'mutationpp' lines to avoid clobbering the editable install
+          awk 'BEGIN{IGNORECASE=1} !/^[[:space:]]*mutationpp[[:space:]]*==/ {print}' requirements.txt > req.nommpp.txt
+          if ! pip install -r req.nommpp.txt; then
+            echo "Retrying without ONLY_BINARY for source builds..."
+            python - <<'PY'
+import os, subprocess, sys
+env = dict(os.environ)
+env.pop("PIP_ONLY_BINARY", None)
+sys.exit(subprocess.call([sys.executable, "-m", "pip", "install", "-r", "req.nommpp.txt"], env=env))
+PY
+          fi
+
+      # ---- Install your package ----
+      - name: Install package
+        run: |
+          pip install -e .[test] || pip install -e .
+
+      # ---- Smoke-check Mutation++ import (optional but helpful) ----
+      - name: Verify mutationpp import
+        run: |
+          python - <<'PY'
+import os
+print("MPP_DIRECTORY:", os.environ.get("MPP_DIRECTORY"))
+print("MPP_DATA_DIRECTORY:", os.environ.get("MPP_DATA_DIRECTORY"))
+import mutationpp as mpp
+print("mutationpp imported OK; dir:", mpp.__file__)
+PY
+
+      # ---- Run tests + coverage ----
+      - name: Run tests
+        run: pytest -q --maxfail=1 --disable-warnings --cov --cov-report=xml
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          python - << 'PY'
+          import xml.etree.ElementTree as ET
+          try:
+              cov = float(ET.parse('coverage.xml').getroot().attrib.get('line-rate', 0))*100
+              print(f"Line coverage: {cov:.1f}%")
+          except Exception as e:
+              print("No coverage or parse error:", e)
+PY
