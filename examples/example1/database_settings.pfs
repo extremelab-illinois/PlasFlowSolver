@@ -1,0 +1,6 @@
+Database name: example_db.csv
+Create database if not found: true
+Update if lower time: true
+Generate ic map: true
+ic map name (Do not include the .h5): db_example
+ic map mixture split: false
