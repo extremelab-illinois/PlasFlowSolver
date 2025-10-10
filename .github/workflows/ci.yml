@@ -160,6 +160,10 @@ jobs:
         shell: bash
         run: |
           # Filter out any 'mutationpp' lines to avoid clobbering the editable install
+          if [ ! -f requirements.txt ]; then
+            echo "requirements.txt not found. Cannot install dependencies."
+            exit 1
+          fi
           awk 'BEGIN{IGNORECASE=1} !/^[[:space:]]*mutationpp[[:space:]]*==/ {print}' requirements.txt > req.nommpp.txt
           if ! pip install -r req.nommpp.txt; then
             echo "Failed to install PlasFlowSolver dependencies..."
