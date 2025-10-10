@@ -81,7 +81,7 @@ ls -lh db_example.h5 example_db.csv example_out.srun
    ln -s ../../thermo     thermo
    ln -s ../../transport  transport
    ```
-4. Run locally and cofirm the three outputs are produced.
+4. Run locally and confirm the three outputs are produced.
 5. Commit the directory:
    ```bash
    git add examples/exampleX
