@@ -196,7 +196,7 @@ jobs:
         run: |
           if [ -d tests ]; then
             pip install -U pytest pytest-cov
-            pytest -q tests --maxfail=1 --disable-warnings --cov=PlasFlowSolver --cov-report=xml -m "not slow"
+            pytest -q tests --maxfail=1 --disable-warnings --cov=main --cov-report=xml -m "not slow"
             # pytest -q --maxfail=1 --disable-warnings --cov --cov-report=xml
           else
             echo "No tests/ directory; skipping pytest for PlasFlowSolver"
