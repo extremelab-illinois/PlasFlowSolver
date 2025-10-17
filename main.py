@@ -147,12 +147,50 @@ while (n_case < n_lines):  # Loop through all the cases
     P_stag = inputs_object.P_stag
     q_target = inputs_object.q_target
     mixture_name = inputs_object.mixture_name
+    plasma_gas = df_object.plasma_gas
+
+    from utils.facility_bounds import (
+        load_bounds_csv,
+        contains,
+        resolve_gas_name
+    )
+    PTXBounds = None
+    try:
+        # Needs to handle unit mismatch
+        PTXBounds = load_bounds_csv(
+            "data/ptx_envelope_clean.csv", gas_col="plasma gas",
+            p_col="stagnation pressure [kPa]", q_col="heat flux [W/cm^2]",
+            pressure_unit="kPa", heatflux_unit="W/cm^2",
+            polygon_col=None,        # optional region delimiting
+            vertex_id_col=None,      # optional vertex ordering
+        )
+    except Exception as e:
+        print("WARNING: Unable to load PTX facility testing envelope data: "
+              f"{e}")
+
     # Print the data for the current case
     print("Comment: " + comment)
     print("Static pressure: " + str(P) + " Pa")
     print("Stagnation pressure: " + str(P_stag) + " Pa")
     print("Target heat flux: " + str(q_target) + " W/m^2")
     print("Mixture name: " + mixture_name)
+
+    facility_gas = resolve_gas_name(plasma_gas)
+    if facility_gas is None:
+        print(f"WARNING: Did not find facility data for '{plasma_gas}', "
+              "skipping envelope check.")
+
+    if PTXBounds is not None and facility_gas is not None:
+        print(f"Checking input for '{plasma_gas}' "
+              f"against facility envelope for '{facility_gas}'.")
+        if not contains(PTXBounds, facility_gas, P_stag, q_target):
+            print(f"WARNING: ({P_stag/1000.:.3g} [kPa], "
+                  f"{q_target/10000.:.3g} [W/cm^2]) "
+                  f"for '{plasma_gas}' is outside PTX tested envelope for "
+                  f"'{facility_gas}'.")
+        else:
+            print("Inputs are within facility testing envelope.")
+
     # Premilimary operation:
     if (probes_object.barker_type == 0):
         n_eq = 3 
@@ -327,6 +365,9 @@ while (n_case < n_lines):  # Loop through all the cases
         rho_out, T_out, h_out, u_out, a_out, M_out, T_t_out, h_t_out, P_t_out,
         Re_out, Kn_out, warnings_out, res_out, rho, T, h, u, a, M, T_t, h_t, P_t, Re, Kn, warnings, cnv
     )
+    if (M_out[0] >= 1.):
+        print(f"WARNING: Output freestream Mach number ({M_out[0]}) violates "
+              "subsonic model assumptions.")
     species_names_out[n_case] = species_names
     species_Y_out[n_case] = species_Y
     print("Executing case number " + str(n_case) + "...done")
