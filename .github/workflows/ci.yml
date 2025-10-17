@@ -1,0 +1,273 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]   # Unix-like only
+        python-version: ["3.10", "3.11", "3.12"]
+
+    env:
+      # Mutation++ locations
+      MPP_SRC: ${{ github.workspace }}/Mutationpp
+      MPP_BUILD: ${{ github.workspace }}/build_mpp
+      MPP_PREFIX: ${{ github.workspace }}/thirdparty
+      CMAKE_BUILD_TYPE: Release
+
+      # Make binary wheels preferred for speed (retry falls back to source)
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_ONLY_BINARY: ":all:"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            **/requirements.txt
+
+      - name: Tool versions (debug)
+        run: |
+          python -V
+          pip -V
+          cmake --version || true
+          ninja --version || true
+
+      # ---- Build tools ----
+      - name: Install build tools (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ pkg-config
+
+      - name: Install build tools (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew update
+          brew install cmake ninja || true
+
+      # ---- Fetch Mutation++ source ----
+      - name: Clone Mutation++
+        run: |
+          git clone --depth 1 https://github.com/mutationpp/Mutationpp.git "${MPP_SRC}"
+
+      - name: Get Mutation++ commit hash
+        id: mppsha
+        run: echo "mpp_sha=$(git -C "${MPP_SRC}" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # ---- Cache the Mutation++ install prefix ----
+      - name: Cache Mutation++ install
+        id: cache-mpp
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.MPP_PREFIX }}
+          key: ${{ runner.os }}-mpp-${{ steps.mppsha.outputs.mpp_sha }}-${{ env.CMAKE_BUILD_TYPE }}
+
+      # ---- Build & install Mutation++ (C++) if cache missed ----
+      - name: Build & install Mutation++ (C++)
+        if: steps.cache-mpp.outputs.cache-hit != 'true'
+        run: |
+          cmake -S "${MPP_SRC}" -B "${MPP_BUILD}" \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" \
+            -DCMAKE_INSTALL_PREFIX="${MPP_PREFIX}"
+          cmake --build "${MPP_BUILD}" --config "${CMAKE_BUILD_TYPE}" --target install -- -v
+
+      # ---- Export Mutation++ env + runtime library paths ----
+      - name: Configure Mutation++ environment
+        shell: bash
+        run: |
+          echo "MPP_DIRECTORY=${MPP_SRC}" >> "$GITHUB_ENV"
+          echo "MPP_DATA_DIRECTORY=${MPP_SRC}/data" >> "$GITHUB_ENV"
+          echo "PATH=${MPP_PREFIX}/bin:${PATH}" >> "$GITHUB_ENV"
+
+          if [[ -d "${MPP_PREFIX}/lib64" ]]; then LIBDIR=lib64; else LIBDIR=lib; fi
+          echo "MPP_LIBDIR=${LIBDIR}" >> "$GITHUB_ENV"
+
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            echo "LD_LIBRARY_PATH=${MPP_PREFIX}/${LIBDIR}:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+            echo "PKG_CONFIG_PATH=${MPP_PREFIX}/${LIBDIR}/pkgconfig:${PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          else
+            echo "DYLD_LIBRARY_PATH=${MPP_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+            echo "PKG_CONFIG_PATH=${MPP_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          fi
+
+          # Help build systems find installed Mutation++ headers/libs
+          echo "CMAKE_PREFIX_PATH=${MPP_PREFIX}:${CMAKE_PREFIX_PATH}" >> "$GITHUB_ENV"
+
+      - name: Print Mutation++ env (debug)
+        run: |
+          echo "MPP_DIRECTORY=$MPP_DIRECTORY"
+          echo "MPP_DATA_DIRECTORY=$MPP_DATA_DIRECTORY"
+          echo "Using libdir: $MPP_LIBDIR"
+          echo "PATH=$PATH"
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+          else
+            echo "DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH"
+          fi
+          echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH"
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+
+      # ---- Python tooling (wheel build helpers) ----
+      - name: Upgrade pip, setuptools, wheel
+        run: python -m pip install -U pip setuptools wheel scikit-build ninja
+
+      # ---- Install Mutation++ Python package (editable) ----
+      # Do this BEFORE your requirements, so Mutation++ headers/libs are present
+      # and bindings can resolve them. We still exclude mutationpp from the later requirements step.
+      - name: Install Mutation++ Python bindings
+        env:
+          CMAKE_ARGS: -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+        run: |
+          cmake --version
+          pip install "${MPP_SRC}" --verbose || (
+            echo "Retrying w/ no build isolation..."
+            pip install --no-build-isolation "${{ env.MPP_SRC }}" --verbose
+          )
+
+      # ---- Smoke-check Mutation++ import (optional but helpful) ----
+      - name: Verify mutationpp import
+        run: |
+          echo "Running smoke import for Mutation++ python app."
+          python - <<'EOF'
+          import os
+          print("MPP_DIRECTORY:", os.environ.get("MPP_DIRECTORY"))
+          print("MPP_DATA_DIRECTORY:", os.environ.get("MPP_DATA_DIRECTORY"))
+          import mutationpp as mpp
+          print("mutationpp OK:", mpp.__file__)
+          # Try to import your package; CHANGE the module path below to your real top-level package
+          # import PlasFlowSolver as pfs
+          # print("PlasFlowSolver import OK:", pfs.__file__)
+          EOF
+
+      # ---- Install your (python-based) requirements (excluding mutationpp pin) ----
+      - name: Install Python dependencies (requirements.txt minus mutationpp)
+        shell: bash
+        run: |
+          # Filter out any 'mutationpp' lines to avoid clobbering the editable install
+          if [ ! -f requirements.txt ]; then
+            echo "requirements.txt not found. Cannot install dependencies."
+            exit 1
+          fi
+          awk 'BEGIN{IGNORECASE=1} !/^[[:space:]]*mutationpp[[:space:]]*==/ {print}' requirements.txt > req.nommpp.txt
+          if ! pip install -r req.nommpp.txt; then
+            echo "Failed to install PlasFlowSolver dependencies..."
+            cat req.nommpp.txt
+            echo "Giving up - next try binary only."
+          fi
+
+      # ---- Install your package ----
+      # - name: Install package
+      #  run: |
+      #    pip install -e .[test] || pip install -e .
+
+
+      # --- No packaging: use PYTHONPATH for imports ---
+      - name: Add repo to PYTHONPATH
+        run: echo "PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}" >> $GITHUB_ENV
+
+      # --- Optional linters for value before tests exist ---
+      - name: Static checks
+        run: |
+          pip install -U ruff mypy || true
+          ruff --version || true
+          ruff check . || true
+          mypy --version || true
+          mypy --ignore-missing-imports . || true
+
+      # --- Run pytest if tests/ exists; otherwise just succeed ---
+      - name: Run pytest (if tests present)
+        shell: bash
+        run: |
+          if [ -d tests ]; then
+            pip install -U pytest pytest-cov
+            pytest -q tests --maxfail=1 --disable-warnings --cov=main --cov-report=xml -m "not slow"
+            # pytest -q --maxfail=1 --disable-warnings --cov --cov-report=xml
+          else
+            echo "No tests/ directory; skipping pytest for PlasFlowSolver"
+          fi
+
+      # -------- Run examples/example* tests ----------------
+      - name: Smoke Test Examples
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          # Discover example scenario dirs (portable: no mapfile/readarray)
+          EXS="$(find examples -maxdepth 1 -mindepth 1 -type d -name 'example*' | sort || true)"
+          if [ -z "$EXS" ]; then
+            echo "No examples/example* directories found; skipping smoke run."
+            exit 0
+          fi
+
+          rc_all=0
+          OLDIFS=$IFS
+          IFS=$'\n'
+          for ex in $EXS; do
+            echo "=== Running $ex ==="
+
+            # Preflight: required inputs + resource links must exist
+            for f in script.pfs example.srun database_settings.pfs; do
+              if [ ! -s "$ex/$f" ]; then
+                echo "::error title=Missing required input::${ex}/${f}"
+                exit 1
+              fi
+            done
+            for d in mixtures thermo transport; do
+              if [ ! -e "$ex/$d" ]; then
+                echo "::error title=Missing resource link::${ex}/${d}"
+                exit 1
+              fi
+            done
+
+            pushd "$ex" >/dev/null
+
+            # Run and capture output without hiding failures
+            set +e
+            python -u ../../main.py > run.log 2>&1
+            rc=$?
+            set -e
+
+            if [ "$rc" -ne 0 ]; then
+              echo "::error title=PlasFlowSolver failed::${ex} exited with rc=${rc}"
+              tail -n 120 run.log || true
+              rc_all=1
+            else
+              # Verify required outputs are present AND non-empty
+              ok=1
+              for out in db_example.h5 example_db.csv example_out.srun; do
+                if [ ! -s "$out" ]; then
+                  echo "::error title=Missing or empty output::${ex}/${out}"
+                  ok=0
+                fi
+              done
+              if [ "$ok" -eq 0 ]; then
+                tail -n 120 run.log || true
+                rc_all=1
+              else
+                echo "Outputs present and non-empty:"
+                wc -c db_example.h5 example_db.csv example_out.srun || true
+                tail -n 30 run.log || true
+              fi
+            fi
+
+            popd >/dev/null
+          done
+          IFS=$OLDIFS
+
+          exit $rc_all
