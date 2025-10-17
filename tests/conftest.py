@@ -5,6 +5,10 @@ import pathlib
 import pytest
 import subprocess
 
+ROOT = os.path.dirname(os.path.dirname(__file__))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -12,12 +16,15 @@ def pytest_addoption(parser):
         help="Run full/slow tests (or set env FULL_CI=1)."
     )
 
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: marks tests as slow")
+
 
 @pytest.fixture(scope="session")
 def project_root():
     return pathlib.Path(__file__).resolve().parents[1]
+
 
 @pytest.fixture
 def runpy(project_root, monkeypatch, tmp_path):
@@ -41,6 +48,7 @@ def runpy(project_root, monkeypatch, tmp_path):
         )
         return proc.returncode, proc.stdout, proc.stderr
     return _run
+
 
 @pytest.fixture(scope="session")
 def is_full(request):
