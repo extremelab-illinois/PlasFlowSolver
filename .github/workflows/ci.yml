@@ -127,7 +127,7 @@ jobs:
 
       # ---- Python tooling (wheel build helpers) ----
       - name: Upgrade pip, setuptools, wheel
-        run: python -m pip install -U pip setuptools wheel scikit-build ninja
+        run: python -m pip install -U pip setuptools wheel scikit-build ninja matplotlib
 
       # ---- Install Mutation++ Python package (editable) ----
       # Do this BEFORE your requirements, so Mutation++ headers/libs are present

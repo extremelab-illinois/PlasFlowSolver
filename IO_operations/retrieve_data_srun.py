@@ -61,7 +61,7 @@ def retrieve_data(df):
     initials_object = classes_file.Initials() 
     probes_object = classes_file.Probes()
     settings_object = classes_file.Settings()
-    warnings = "" 
+    warnings = []  # Store warnings as a list, merge into single string later
     # Inputs:
     inputs_object.comment = df.comment
     inputs_object.P = df.P
@@ -81,8 +81,7 @@ def retrieve_data(df):
             df.ic_db_name, df.P, df.P_dyn, df.q_target,
             df.T_w, df.max_T_relax
             )
-        if(warnings_int is not None):
-            warnings += warnings_int
+        warnings.extend(warnings_int)
     probes_object.T_w = df.T_w
     probes_object.R_p = df.R_p
     probes_object.R_m = df.R_m
@@ -109,12 +108,8 @@ def retrieve_data(df):
     if (probes_object.barker_type == 0 and initials_object.P_t_0 != inputs_object.P_stag):
         # If the Barker effect is not considered, the P_t_0 must be equal to P_stag
         initials_object.P_t_0 = inputs_object.P_stag
-        warnings += "P_t_0 not consistent with the Barker's correction, set to P_stag|"
-    # I return the result
-    if (warnings != "" and warnings[-1] == "|"):  # I remove the last character
-        warnings = warnings[:-1]
-    if(warnings == ""):
-        warnings = "None"
+        warnings.append("P_t_0 not consistent with the Barker's correction, set to P_stag")
+
     return inputs_object, initials_object, probes_object, settings_object, warnings
 #.................................................
 #   Possible improvements:

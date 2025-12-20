@@ -70,10 +70,10 @@ def append_error_case(
         has_converged_out.append("Error: invalid data")
         warnings_out.append("Error: invalid data")
     elif (type_error == 1):
-        has_converged_out.append("Error detected during the computation.")
-        warnings_out.append("Error detected during the computation.")
+        has_converged_out.append("Error detected during the computation")
+        warnings_out.append("Error detected during the computation")
     else:
-        raise ValueError("Error: invalid error type.")
+        raise ValueError("Error: invalid error type")
     
     return (
         has_converged_out, rho_out, T_out, h_out, u_out, a_out, M_out, T_t_out,
@@ -99,7 +99,7 @@ def append_output_case(
         P_t_out (list): total pressure
         Re_out (list): Pitot Reynolds number
         Kn_out (list): free stream Knudsen number
-        warnings_out (list): warnings
+        warnings_out (list): list of merged case-specific warning strings
         res_out (list): final convergence criteria
         rho (float): free stream density
         T (float): free stream temperature
@@ -112,7 +112,7 @@ def append_output_case(
         P_t (float): total pressure
         Re (float): Pitot Reynolds number
         Kn (float): free stream Knudsen number
-        warnings (str): warnings
+        warnings (list): list of warning strings
         res (float): final convergence criteria
         """
     rho_out.append(rho)
@@ -126,7 +126,12 @@ def append_output_case(
     P_t_out.append(P_t)
     Re_out.append(Re)
     Kn_out.append(Kn)
-    warnings_out.append(warnings)
+    # Merge case-specific list of warning strings into single string
+    if warnings:
+        warnout = "|".join(warnings)
+    else:
+        warnout = "None"
+    warnings_out.append(warnout)
     res_out.append(res)
     return (
         rho_out, T_out, h_out, u_out, a_out, M_out, T_t_out,

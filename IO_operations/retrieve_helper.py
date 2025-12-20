@@ -67,29 +67,26 @@ def retrieve_mixture_name(plasma_gas):
     Returns:
         mixture_name (string): the mixture name
     """
-    # Match the plasma gas:
-    match plasma_gas:
-        case "n2":
-            mixture_name = "nitrogen2"
-        case "N2":
-            mixture_name = "nitrogen2"
-        case "nitrogen2":
-            mixture_name = "nitrogen2"
-        case "air_13":
-            mixture_name = "air_13"
-        case "air_11":
-            mixture_name = "air_11"
-        case "co2":
-            mixture_name = "CO2_8"
-        case "CO2":
-            mixture_name = "CO2_8"
-        case _:  # If the plasma gas is not in the list, I have to check if it is a valid mixture
-            try:
-                mix_temp = mpp.Mixture(plasma_gas)
-                mixture_name = plasma_gas
-            except:
-                raise ValueError("Error: Invalid plasma gas. Check the input file.")
+    program_constants = ProgramConstants()
+    mixture_name = None
+    # Get a known mixture name from hard-coded map
+    try:
+        mixture_name = program_constants.RetrieverHelper.PLASMA_GAS_TO_MIXTURE[plasma_gas]
+    except Exception:
+        # Wasn't found, try plasma_gas as the mixture name
+        mixture_name = plasma_gas
+
+    # Validate the mixture name by making sure there is an associated MPP mixture
+    try:
+        mix_temp = mpp.Mixture(mixture_name)
+    except Exception as e:
+        # If the mixture can't be resolved in Mutation++, show the user
+        # both the mixture_name we tried, and the error that Mutation++ threw
+        print(f"Could not resolve Mutation++ mixture({mixture_name}): {e}.")
+        raise ValueError("Error: Invalid plasma gas. Check the input file.")
+
     return mixture_name
+
 #...................................................
 def retrieve_ic(db_name, P, P_dyn, q_target, T_w, max_T_relax):
     """This function retrieves the initial conditions from the database.

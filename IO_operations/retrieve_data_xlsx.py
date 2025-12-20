@@ -204,7 +204,7 @@ def retrieve_data(df,n_case):
     initials_object = classes_file.Initials() 
     probes_object = classes_file.Probes()
     settings_object = classes_file.Settings() 
-    warnings = ""
+    warnings = []  # Store warnings as a list, merge into single string later
     # I read the std values:
     std_values = read_std_values()
     # comment
@@ -246,13 +246,13 @@ def retrieve_data(df,n_case):
     plasma_gas = df.plasma_gas[n_case]  # Plasma gas (string)
     if (pd.isna(plasma_gas) or plasma_gas == None or plasma_gas == ""):
         inputs_object.mixture_name = std_values.plasma_gas
-        warnings += "Plasma gas invalid, set to STD|"
+        warnings.append("Plasma gas invalid, set to STD")
     else:
         try:
             inputs_object.mixture_name = retrieve_mixture_name(plasma_gas)  # Plasma gas (string)
         except:
             inputs_object.mixture_name = std_values.plasma_gas
-            warnings += "Plasma gas invalid, set to STD|"
+            warnings.append(f"Plasma gas ({plasma_gas}) invalid, set to STD")
     # Check if the mixture exists:
     try:
         mix_temp = mpp.Mixture(inputs_object.mixture_name)
@@ -272,14 +272,14 @@ def retrieve_data(df,n_case):
     T_w = df.T_w[n_case]  # Wall temperature (float)
     if (is_valid_data(T_w) == False):
         probes_object.T_w = std_values.T_w
-        warnings += "T_w invalid, set to STD|"
+        warnings.append("T_w invalid, set to STD")
     else:
         probes_object.T_w=df.T_w[n_case]
     # Needed:
     max_T_relax = df.max_T_relax[n_case]  # Maximum value for the temperature used for relaxation
     if (is_valid_data(max_T_relax) == False):
         settings_object.max_T_relax = std_values.max_T_relax
-        warnings += "max_T_relax invalid, set to STD|"
+        warnings.append("max_T_relax invalid, set to STD")
     else:
         settings_object.max_T_relax = df.max_T_relax[n_case] 
     # Initials:
@@ -290,28 +290,27 @@ def retrieve_data(df,n_case):
             ic_db_name, inputs_object.P, inputs_object.P_dyn, inputs_object.q_target,
             probes_object.T_w, settings_object.max_T_relax
             )
-        if(warnings_int is not None):
-            warnings += warnings_int
+        warnings.extend(warnings_int)
     else:
         if(ic_db_name != "" and (pd.isna(ic_db_name) == False)):
             print("Initial conditions database " + ic_db_name + " invalid. Initial conditions will be read from the file.")
-            warnings += "Invalid initial conditions database|"
+            warnings.append("Invalid initial conditions database")
         T_0 = df.T_0[n_case]  # Initial temperature (float)
         if (is_valid_data(T_0) == False):
             initials_object.T_0 = std_values.T_0
-            warnings += "T_0 invalid, set to STD|"
+            warnings.append("T_0 invalid, set to STD")
         else:
             initials_object.T_0 = df.T_0[n_case] 
         T_t_0 = df.T_t_0[n_case]  # Initial total temperature (float)
         if (is_valid_data(T_t_0) == False):
             initials_object.T_t_0 = std_values.T_t_0
-            warnings += "T_t_0 invalid, set to STD|"
+            warnings.append("T_t_0 invalid, set to STD")
         else:
             initials_object.T_t_0 = df.T_t_0[n_case] 
         u_0 = df.u_0[n_case]  # Initial velocity (float)
         if (is_valid_data(u_0) == False):
             initials_object.u_0 = std_values.u_0
-            warnings += "u_0 invalid, set to STD|"
+            warnings.append("u_0 invalid, set to STD")
         else:
             initials_object.u_0 = df.u_0[n_case] 
         P_t_0 = df.P_t_0[n_case]  # Initial total pressure (float)
@@ -322,32 +321,32 @@ def retrieve_data(df,n_case):
                 initials_object.P_t_0 = std_values.P_t_0
                 if (initials_object.P_t_0 == 0):
                     initials_object.P_t_0 = inputs_object.P_stag
-                warnings += "P_t_0 invalid, set to STD|"
+                warnings.append("P_t_0 invalid, set to STD")
         else:
             initials_object.P_t_0 = df.P_t_0[n_case]
     # Probe properties:
     R_p = df.R_p[n_case]  # Pitot external radius (float)
     if (is_valid_data(R_p) == False):
         probes_object.R_p = std_values.R_p
-        warnings += "R_p invalid, set to STD|"
+        warnings.append("R_p invalid, set to STD")
     else:
         probes_object.R_p = df.R_p[n_case] 
     R_m = df.R_m[n_case]  # Flux probe external radius (float)
     if (is_valid_data(R_m) == False):
         probes_object.R_m = std_values.R_m
-        warnings += "R_m invalid, set to STD|"
+        warnings.append("R_m invalid, set to STD")
     else:
         probes_object.R_m = df.R_m[n_case]
     R_j = df.R_j[n_case]  # Plasma jet radius (float)
     if (is_valid_data(R_j) == False):
         probes_object.R_j = std_values.R_j
-        warnings += "R_j invalid, set to STD|"
+        warnings.append("R_j invalid, set to STD")
     else:
         probes_object.R_j = df.R_j[n_case]
     stag_type = df.stag_type[n_case]  # Stagnation type (string->integer)
     if (pd.isna(stag_type)):
         probes_object.stag_type = std_values.stag_type
-        warnings += "stag_type invalid, set to STD|"
+        warnings.append("stag_type invalid, set to STD")
     else:
         try:
             stag_type = stag_type.lower()
@@ -355,11 +354,11 @@ def retrieve_data(df,n_case):
             probes_object.stag_type = stag_type
         except:
             probes_object.stag_type = std_values.stag_type
-            warnings += "stag_type invalid or not yet implemented, set to STD|"
+            warnings.append("stag_type invalid or not yet implemented, set to STD")
     hf_law = df.hf_law[n_case]  # Heat flux law (string->integer)
     if (pd.isna(hf_law)):
         probes_object.hf_law = std_values.hf_law
-        warnings += "hf_law invalid, set to STD|"
+        warnings.append("hf_law invalid, set to STD")
     else:
         try:
             hf_law = hf_law.lower()
@@ -367,11 +366,11 @@ def retrieve_data(df,n_case):
             probes_object.hf_law = hf_law
         except:
             probes_object.hf_law = std_values.hf_law
-            warnings += "hf_law invalid or not yet implemented, set to STD|"
+            warnings.append("hf_law invalid or not yet implemented, set to STD")
     barker_type = df.barker_type[n_case] #Barker correct, string->integer
     if (pd.isna(barker_type)):
         probes_object.barker_type = std_values.barker_type
-        warnings += "barker_type invalid, set to STD|"
+        warnings.append("barker_type invalid, set to STD")
     else:
         try:
             barker_type = barker_type.lower()
@@ -379,7 +378,7 @@ def retrieve_data(df,n_case):
             probes_object.barker_type = barker_type
         except:
             probes_object.barker_type = std_values.barker_type
-            warnings += "barker_type invalid or not yet implemented, set to STD|"
+            warnings.append("barker_type invalid or not yet implemented, set to STD")
     stag_var = retrieve_stag_var(probes_object.stag_type, probes_object.R_m, probes_object.R_j)  # Stagnation variable (float)
     # NOTE: R_m and R_j are not in the SI units, but in the current implementation
     # only their ratio is used for stag_var, so this is not a problem.
@@ -387,38 +386,38 @@ def retrieve_data(df,n_case):
     # Barker's effect and P_t_0 consistency check:
     if (probes_object.barker_type == 0 and initials_object.P_t_0 != inputs_object.P_stag):
         initials_object.P_t_0 = inputs_object.P_stag
-        warnings += "P_t_0 not consistent with the Barker's correction, set to P_stag|"
+        warnings.append("P_t_0 not consistent with the Barker's correction, set to P_stag")
     # Settings:
     N_p = df.N_p[n_case]  # Number of point for the boundary layer eta discretization (integer)
     if (is_valid_data(N_p) == False):
         settings_object.N_p = std_values.N_p
-        warnings += "N_p invalid, set to STD|"
+        warnings.append("N_p invalid, set to STD")
     else:
         if(int(N_p)==N_p):
             settings_object.N_p = int(df.N_p[n_case])  
         else:
             settings_object.N_p = std_values.N_p
-            warnings += "N_p invalid, set to STD|"
+            warnings.append("N_p invalid, set to STD")
     max_hf_iter = df.max_hf_iter[n_case]  # Maximum number of iterations for the heat transfer (integer)
     if (is_valid_data(max_hf_iter) == False):
         settings_object.max_hf_iter = std_values.max_hf_iter
-        warnings += "max_hf_iter invalid, set to STD|"
+        warnings.append("max_hf_iter invalid, set to STD")
     else:
         if (int(max_hf_iter) == max_hf_iter):
             settings_object.max_hf_iter = df.max_hf_iter[n_case]  # Maximum number of iterations for the heat transfer
         else:
             settings_object.max_hf_iter = std_values.max_hf_iter
-            warnings += "max_hf_iter invalid, set to STD|"
+            warnings.append("max_hf_iter invalid, set to STD")
     hf_conv = df.hf_conv[n_case]  # Convergence criteria for the heat transfer (float)
     if (is_valid_data(hf_conv) == False):
         settings_object.hf_conv = std_values.hf_conv
-        warnings += "hf_conv invalid, set to STD|"
+        warnings.append("hf_conv invalid, set to STD")
     else:
         settings_object.hf_conv = df.hf_conv[n_case] 
     use_prev_ite = df.use_prev_ite[n_case]  # Use previous iteration for the heat transfer (string->integer)
     if (pd.isna(use_prev_ite)):
         settings_object.use_prev_ite = std_values.use_prev_ite
-        warnings += "use_prev_ite invalid, set to STD|"
+        warnings.append("use_prev_ite invalid, set to STD")
     else:
         try:
             use_prev_ite = use_prev_ite.lower()
@@ -426,17 +425,17 @@ def retrieve_data(df,n_case):
             settings_object.use_prev_ite = use_prev_ite
         except:
             settings_object.use_prev_ite = std_values.use_prev_ite
-            warnings += "use_prev_ite invalid, set to STD|"
+            warnings.append("use_prev_ite invalid, set to STD")
     eta_max = df.eta_max[n_case]  # Upper integration boundary for the normal coordinate of the boundary layer (float)
     if (is_valid_data(eta_max) == False):
         settings_object.eta_max = std_values.eta_max
-        warnings += "eta_max invalid, set to STD|"
+        warnings.append("eta_max invalid, set to STD")
     else:
         settings_object.eta_max = df.eta_max[n_case] 
     log_warning_hf = df.log_warning_hf[n_case]  # Log warning for the heat flux (string)
     if (pd.isna(log_warning_hf)):
         settings_object.log_warning_hf = std_values.log_warning_hf
-        warnings += "log_warning_hf invalid, set to STD|"
+        warnings.append("log_warning_hf invalid, set to STD")
     else:
         try:
             log_warning_hf = log_warning_hf.lower() 
@@ -444,40 +443,36 @@ def retrieve_data(df,n_case):
             settings_object.log_warning_hf = log_warning_hf
         except:
             settings_object.log_warning_hf = std_values.log_warning_hf
-            warnings += "log_warning_hf invalid, set to STD|"
+            warnings.append("log_warning_hf invalid, set to STD")
     newton_conv = df.newton_conv[n_case]  # Convergence criteria for the newton solver (float)
     if (is_valid_data(newton_conv) == False):
         settings_object.newton_conv = std_values.newton_conv
-        warnings += "newton_conv invalid, set to STD|"
+        warnings.append("newton_conv invalid, set to STD")
     else:
         settings_object.newton_conv = df.newton_conv[n_case] 
     max_newton_iter = df.max_newton_iter[n_case]  # Maximum number of iterations for the newton solver (integer)
     if (is_valid_data(max_newton_iter) == False):
         settings_object.max_newton_iter = std_values.max_newton_iter
-        warnings += "max_newton_iter invalid, set to STD|"
+        warnings.append("max_newton_iter invalid, set to STD")
     else:
         if(int(max_newton_iter) == max_newton_iter):
             settings_object.max_newton_iter = df.max_newton_iter[n_case] 
         else:
             settings_object.max_newton_iter = std_values.max_newton_iter
-            warnings += "max_newton_iter invalid, set to STD|"
+            warnings.append("max_newton_iter invalid, set to STD")
     jac_diff = df.jac_diff[n_case]  # Jacobian finite difference epsilon (float)
     if (is_valid_data(jac_diff) == False):
         settings_object.jac_diff = std_values.jac_diff
-        warnings += "jac_diff invalid, set to STD|"
+        warnings.append("jac_diff invalid, set to STD")
     else:
         settings_object.jac_diff = df.jac_diff[n_case] 
     min_T_relax = df.min_T_relax[n_case]  # Minimum value for the temperature used for relaxation
     if (is_valid_data(min_T_relax) == False):
         settings_object.min_T_relax = std_values.min_T_relax
-        warnings += "min_T_relax invalid, set to STD|"
+        warnings.append("min_T_relax invalid, set to STD")
     else:
         settings_object.min_T_relax = df.min_T_relax[n_case] 
-    # Return the objects:
-    if (warnings != "" and warnings[-1] == "|"):  # I remove the last character
-        warnings = warnings[:-1]
-    if(warnings == ""):
-        warnings = "None"
+
     return inputs_object, initials_object, probes_object, settings_object, warnings
 #.................................................
 #   Possible improvements:

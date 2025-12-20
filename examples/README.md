@@ -20,6 +20,7 @@ examples/
     mixtures   -> ../../mixtures    # <- resource symlink
     thermo     -> ../../thermo      # <- resource symlink
     transport  -> ../../transport   # <- resource symlink
+    data       -> ../../data        # <- resource symlink
 ```
 
 - `script.pfs` selects the "srun" mode and the input file:
@@ -30,7 +31,7 @@ File: example.srun
 Settings: N/A
 ```
 
-- **Resource directories** are symlinks pointing back to PlasFlowSolver's top-level folders. Keep these three links for now.
+- **Resource directories** are symlinks pointing back to PlasFlowSolver's top-level folders. Keep these links for now.
 
 
 ---
@@ -80,6 +81,7 @@ ls -lh db_example.h5 example_db.csv example_out.srun
    ln -s ../../mixtures   mixtures
    ln -s ../../thermo     thermo
    ln -s ../../transport  transport
+   ln -s ../../data       data
    ```
 4. Run locally and confirm the three outputs are produced.
 5. Commit the directory:

@@ -1,0 +1,95 @@
+import pytest
+import utils.facility_bounds as fb
+
+# Realistic N2 snippet (kPa, W/cm^2)
+N2_CSV = """plasma gas,stagnation pressure [kPa],heat flux [W/cm^2]
+N2,7.0658,161.0268227
+N2,1.173,23.96883371
+N2,1.1029,26.68299744
+N2,0.8364,37.46889853
+N2,0.8453,40.56248125
+N2,1.3875,227.6007938
+N2,1.8881,260.1310493
+"""
+
+
+def test_resolve_gas_name_mapping():
+    # Uses your explicit map in facility_bounds.resolve_gas_name
+    assert fb.resolve_gas_name("air_11") == "Air"
+    assert fb.resolve_gas_name("air_13") == "Air"
+    assert fb.resolve_gas_name("air_5") == "Air"
+    assert fb.resolve_gas_name("nitrogen2") == "N2"
+    assert fb.resolve_gas_name("nitrogen5") == "N2"
+    assert fb.resolve_gas_name("test_N2") == "N2"
+    assert fb.resolve_gas_name("CO2_8") == "CO2"
+    # Unknown should return None
+    assert fb.resolve_gas_name("Mars_19") is None
+
+
+def _load_n2_polygon(tmp_path):
+    path = tmp_path / "n2_bounds.csv"
+    path.write_text(N2_CSV)
+    db = fb.load_bounds_csv(
+        str(path),
+        gas_col="plasma gas",
+        p_col="stagnation pressure [kPa]",
+        q_col="heat flux [W/cm^2]",
+        pressure_unit="kPa",
+        heatflux_unit="W/cm^2",
+        polygon_col=None,
+        vertex_id_col=None,
+    )
+    assert "N2" in db
+    return db["N2"]
+
+
+def test_envelope_diagnostics_inside_vertex(tmp_path):
+    """
+    Pick a known vertex of the N2 polygon; diagnostics should:
+      - report inside_polygon=True
+      - show no violations
+      - bounds enclosing the point.
+    """
+    gas_poly = _load_n2_polygon(tmp_path)
+
+    # Use one of the vertices directly
+    P_kPa = 1.173
+    q_Wcm2 = 23.96883371
+
+    diag = fb.envelope_diagnostics(gas_poly, P_kPa*1e3, q_Wcm2*1e4)
+
+    assert diag.gas == "N2"
+    assert diag.inside_polygon
+    assert not diag.pressure_violation
+    assert not diag.heatflux_violation
+
+    assert diag.Pmin_kPa <= P_kPa <= diag.Pmax_kPa
+    assert diag.qmin_Wcm2 <= q_Wcm2 <= diag.qmax_Wcm2
+
+    assert diag.dP_kPa == pytest.approx(0.0)
+    assert diag.dq_Wcm2 == pytest.approx(0.0)
+
+
+def test_envelope_diagnostics_outside_high(tmp_path):
+    """
+    Choose a point well above the N2 envelope; diagnostics should show
+    violations and positive distances in both dimensions.
+    """
+    gas_poly = _load_n2_polygon(tmp_path)
+
+    # Clearly outside in both pressure and heat flux
+    P_kPa = 100.0
+    q_Wcm2 = 1000.0
+
+    diag = fb.envelope_diagnostics(gas_poly, P_kPa*1e3, q_Wcm2*1e4)
+
+    assert not diag.inside_polygon
+    assert diag.pressure_violation
+    assert diag.heatflux_violation
+
+    assert diag.dP_kPa > 0.0
+    assert diag.dq_Wcm2 > 0.0
+
+    # should be above the max bounds
+    assert P_kPa > diag.Pmax_kPa
+    assert q_Wcm2 > diag.qmax_Wcm2

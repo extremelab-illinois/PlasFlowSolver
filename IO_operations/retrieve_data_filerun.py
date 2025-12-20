@@ -54,7 +54,7 @@ def retrieve_data(df, n_case):
     initials_object = classes_file.Initials() 
     probes_object = classes_file.Probes() 
     settings_object = classes_file.Settings()
-    warnings = ""
+    warnings = []  # Store warnings as a list, merge into single string later
     # INPUTS:
     # Comment:
     comment = df.comment[n_case]  # comment (string)
@@ -99,8 +99,7 @@ def retrieve_data(df, n_case):
             ic_db_name, inputs_object.P, inputs_object.P_dyn, inputs_object.q_target,
             df.T_w, df.max_T_relax
             )
-        if (warnings_int is not None):
-            warnings += warnings_int
+        warnings.extend(warnings_int)
     else:
         T_0 = df.T_0  # Initial temperature (float)
         initials_object.T_0 = T_0 
@@ -173,12 +172,8 @@ def retrieve_data(df, n_case):
     # Check Barker's effect and initial total pressure consistency:
     if (probes_object.barker_type == 0 and initials_object.P_t_0 != inputs_object.P_stag):
         initials_object.P_t_0 = inputs_object.P_stag
-        warnings += "P_t_0 not consistent with the Barker's correction, set to P_stag|"
+        warnings.append("P_t_0 not consistent with the Barker's correction, set to P_stag")
     # Return the objects
-    if (warnings != "" and warnings[-1] == "|"):  # Remove the last character if it is a "|"
-        warnings = warnings[:-1]
-    if (warnings == ""):
-        warnings = "None"
     return inputs_object, initials_object, probes_object, settings_object, warnings
 #.................................................
 #   Possible improvements:

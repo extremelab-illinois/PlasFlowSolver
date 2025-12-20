@@ -205,7 +205,7 @@ def interp_ic_db(ic_db, P, P_dyn, q_target, T_w, max_T_relax, multiplication_fac
 
     Returns:
         initial_conditions (initials_class): the initial conditions object
-        warnings (string): the warnings
+        warnings (list): the warnings
     """
     # Constants:
     program_constants = classes_file.ProgramConstants()  # Program constants
@@ -217,14 +217,14 @@ def interp_ic_db(ic_db, P, P_dyn, q_target, T_w, max_T_relax, multiplication_fac
     int_point = [P, P_dyn, q_target]  # The point to interpolate
     points = ic_db.db_inputs  # The points of the database
     values = ic_db.db_outputs  # The values of the database
-    warnings = ""  # The warnings
+    warnings = []  # Store warnings as a list of strings, merge into single string later
     # We try to interpolate the data by linear interpolation
     T_0 = scipy_int.griddata(points, values[:,0], int_point, method='linear', fill_value=-1.0)
     T_t_0 = scipy_int.griddata(points, values[:,1], int_point, method='linear', fill_value=-1.0)
     u_0 = scipy_int.griddata(points, values[:,2], int_point, method='linear', fill_value=-1.0)
     # If the linear interpolation fails, extrapolation is used
     if (T_0 == -1.0 or T_t_0 == -1.0 or u_0 == -1.0): 
-        warnings += "Linear interpolation failed, nearest interpolation used."
+        warnings.append("Linear interpolation failed, nearest interpolation used")
         rfb4 = scipy_int.Rbf(points[:,0], points[:,1], points[:,2], values[:,0], function='thin_plate', smooth=5)
         T_0 = []
         T_0.append(rfb4(int_point[0], int_point[1], int_point[2]))
@@ -241,7 +241,7 @@ def interp_ic_db(ic_db, P, P_dyn, q_target, T_w, max_T_relax, multiplication_fac
             T_0 = scipy_int.griddata(points, values[:,0], int_point, method='nearest')
             T_t_0 = scipy_int.griddata(points, values[:,1], int_point, method='nearest')
             u_0 = scipy_int.griddata(points, values[:,2], int_point, method='nearest')
-            warnings += "Linear interpolation failed, nearest interpolation used.|"
+            warnings.append("Linear interpolation failed, nearest interpolation used")
     # I create the object
     T_0 = T_0[0]*multiplication_factor
     if(T_0 < T_w):
@@ -256,10 +256,9 @@ def interp_ic_db(ic_db, P, P_dyn, q_target, T_w, max_T_relax, multiplication_fac
     initial_conditions.T_t_0 = T_t_0
     initial_conditions.u_0 = u_0
     initial_conditions.P_t_0 = P + P_dyn
-    if (warnings == ""):
-        warnings = None
     # I return the object
     return initial_conditions, warnings
+
 #.................................................
 #   Possible improvements:
 #   -create_ic_db_from_p_and_v could use
