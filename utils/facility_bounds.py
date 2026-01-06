@@ -512,7 +512,7 @@ def check_ptx_envelope(path, plasma_gas, P_stag, q_target):
 
         warning_msg = (
             f"[bounds] Distance to experimental envelope: ({diag.dP_poly_kPa} kPa,"
-            f" {diag.dq_poly_Wcm2} W/cm^2)."
+            f" {diag.dq_poly_Wcm2} W/cm^2)"
         )
         print(warning_msg)
 
