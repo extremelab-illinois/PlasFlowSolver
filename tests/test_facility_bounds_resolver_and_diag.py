@@ -93,3 +93,81 @@ def test_envelope_diagnostics_outside_high(tmp_path):
     # should be above the max bounds
     assert P_kPa > diag.Pmax_kPa
     assert q_Wcm2 > diag.qmax_Wcm2
+
+import math
+from utils.facility_bounds import (
+    GasPolygon,
+    envelope_diagnostics,
+)
+
+
+def test_polygon_boundary_distance_outside_square():
+    """
+    Point is outside a square polygon.
+    Verify:
+      - inside_polygon is False
+      - closest-point deltas move toward the polygon
+      - normalized distance is positive
+    """
+    # Square in (kPa, W/cm^2) mapped internally to SI
+    # Square corners: (1,1), (3,1), (3,3), (1,3)
+    poly = GasPolygon(
+        gas="TEST",
+        vertices=[
+            (1.0e3, 1.0e4),
+            (3.0e3, 1.0e4),
+            (3.0e3, 3.0e4),
+            (1.0e3, 3.0e4),
+        ],
+    )
+
+    # Point clearly outside: right and above
+    P = 4.0e3
+    q = 4.0e4
+    P_kPa = 4.0
+    q_Wcm2 = 4.0
+
+    diag = envelope_diagnostics(poly, P, q)
+
+    assert not diag.inside_polygon
+    assert diag.dist_poly_norm > 0.0
+
+    # Closest point should pull us back toward the square
+    # Expect negative deltas in both components
+    assert diag.dP_poly_kPa < 0.0
+    assert diag.dq_poly_Wcm2 < 0.0
+
+    # Applying the deltas should land us on or very near the boundary
+    P_new = (P_kPa + diag.dP_poly_kPa)*1.e3
+    q_new = (q_Wcm2 + diag.dq_poly_Wcm2)*1.e4
+
+    diag2 = envelope_diagnostics(poly, P_new, q_new)
+    assert diag2.dist_poly_norm < 1.0e-12
+
+
+def test_polygon_boundary_distance_on_edge_is_zero():
+    """
+    Point lies exactly on a polygon edge.
+    Expect:
+      - inside_polygon may be True or False depending on winding,
+        but boundary distance must be zero.
+    """
+    poly = GasPolygon(
+        gas="TEST",
+        vertices=[
+            (0.0, 0.0),
+            (2.0e3, 0.0),
+            (2.0e3, 2.0e4),
+            (0.0, 2.0e4),
+        ],
+    )
+
+    # Exactly on right edge
+    P = 2.0e3
+    q = 1.0e4
+
+    diag = envelope_diagnostics(poly, P, q)
+
+    assert math.isclose(diag.dist_poly_norm, 0.0, abs_tol=1.0e-12)
+    assert math.isclose(diag.dP_poly_kPa, 0.0, abs_tol=1.0e-12)
+    assert math.isclose(diag.dq_poly_Wcm2, 0.0, abs_tol=1.0e-12)

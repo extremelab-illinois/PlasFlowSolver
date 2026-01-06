@@ -61,6 +61,11 @@ class EnvelopeDiagnostics:
     dP_kPa: float      # how far outside in kPa (0 if not violated)
     dq_Wcm2: float     # how far outside in W/cm^2 (0 if not violated)
 
+    # Component-wise delta to closest point on polygon boundary
+    dP_poly_kPa: float = 0.0     # (P_closest - P) in kPa
+    dq_poly_Wcm2: float = 0.0    # (q_closest - q) in W/cm^2
+    dist_poly_norm: float = 0.0  # dimensionless distance in normalized space
+
 
 def resolve_gas_name(input_gas_name: str) -> str:
     facility_gas_name = None
@@ -299,6 +304,87 @@ def point_in_polygon(point: Point, poly: List[Point],
             inside = not inside
     return inside
 
+
+def _closest_point_on_segment_2d(p, a, b):
+    """
+    Return closest point c to p on segment a->b, and param t in [0,1]
+    such that c = a + t*(b-a).
+    """
+    px, py = p
+    ax, ay = a
+    bx, by = b
+    abx = bx - ax
+    aby = by - ay
+    apx = px - ax
+    apy = py - ay
+    denom = abx*abx + aby*aby
+    if denom <= 0.0:
+        return a, 0.0
+    t = (apx*abx + apy*aby) / denom
+    if t < 0.0:
+        t = 0.0
+    elif t > 1.0:
+        t = 1.0
+    return (ax + t*abx, ay + t*aby), t
+
+
+def closest_point_on_polygon_boundary_normalized(
+        p: Point,
+        verts: List[Point],) -> Tuple[Point, float]:
+    """
+    Find closest point on polygon boundary to p using a normalized metric.
+
+    Normalization scales each axis by its polygon bounding-box range:
+      P_norm = (P - Pmin) / (Pmax - Pmin)
+      q_norm = (q - qmin) / (qmax - qmin)
+
+    Returns (closest_point_in_SI, dist_norm).
+    """
+    if len(verts) < 2:
+        return p, 0.0
+
+    xs = [x for x, _ in verts]
+    ys = [y for _, y in verts]
+    xmin, xmax = min(xs), max(xs)
+    ymin, ymax = min(ys), max(ys)
+    dx = xmax - xmin
+    dy = ymax - ymin
+    # avoid divide-by-zero degeneracy
+    inv_dx = 1.0 / dx if dx > 0.0 else 1.0
+    inv_dy = 1.0 / dy if dy > 0.0 else 1.0
+
+    def norm(u):
+        return ((u[0] - xmin) * inv_dx, (u[1] - ymin) * inv_dy)
+
+    pN = norm(p)
+
+    best_c = verts[0]
+    best_d2 = float("inf")
+
+    n = len(verts)
+    for i in range(n):
+        a = verts[i]
+        b = verts[(i + 1) % n]
+
+        aN = norm(a)
+        bN = norm(b)
+
+        cN, t = _closest_point_on_segment_2d(pN, aN, bN)
+
+        # distance in normalized space
+        dxN = pN[0] - cN[0]
+        dyN = pN[1] - cN[1]
+        d2 = dxN*dxN + dyN*dyN
+
+        if d2 < best_d2:
+            best_d2 = d2
+            # use same t on original segment (affine scaling => consistent)
+            best_c = (a[0] + t*(b[0] - a[0]),
+                      a[1] + t*(b[1] - a[1]))
+
+    return best_c, (best_d2 ** 0.5)
+
+
 # This routine uses SI unit inputs
 def envelope_diagnostics(
     gas_poly: "GasPolygon",
@@ -339,6 +425,17 @@ def envelope_diagnostics(
         else:
             dq_Wcm2 = (q_SI - qmax_SI) / 1.0e4
 
+    dP_poly_kPa = 0.0
+    dq_poly_Wcm2 = 0.0
+    dist_poly_norm = 0.0
+
+    if not inside and len(gas_poly.vertices) >= 2:
+        c, dist_poly_norm = closest_point_on_polygon_boundary_normalized(
+            (P_SI, q_SI), gas_poly.vertices
+        )
+        dP_poly_kPa = (c[0] - P_SI) / 1.0e3
+        dq_poly_Wcm2 = (c[1] - q_SI) / 1.0e4
+
     return EnvelopeDiagnostics(
         gas=gas_poly.gas,
         inside_polygon=inside,
@@ -352,6 +449,9 @@ def envelope_diagnostics(
         qmax_Wcm2=qmax_SI / 1.0e4,
         dP_kPa=dP_kPa,
         dq_Wcm2=dq_Wcm2,
+        dP_poly_kPa=dP_poly_kPa,
+        dq_poly_Wcm2=dq_poly_Wcm2,
+        dist_poly_norm=dist_poly_norm,
     )
 
 
@@ -408,43 +508,13 @@ def check_ptx_envelope(path, plasma_gas, P_stag, q_target):
                        f"'{facility_gas}'"
                        )
         warnings.append(warning_msg)
-        warning_msg = (
-            "---------------------------------------\n"+warning_msg+"\n"
-            f"[bounds] Facility bounds for {diag.gas}:"
-            f"Stagnation Pressure [{diag.Pmin_kPa:.3g}, "
-            f"{diag.Pmax_kPa:.3g}] kPa, "
-            f"Heat Flux [{diag.qmin_Wcm2:.3g}, "
-            f"{diag.qmax_Wcm2:.3g}] W/cm^2"
-        )
         print(warning_msg)
 
-        if diag.pressure_violation:
-            direction = (
-                "below" if diag.P_kPa < diag.Pmin_kPa else "above"
-            )
-            warning_msg = (
-                f"[bounds]   Specified stagnation pressure "
-                f"({diag.P_kPa:.3g} kPa) is {diag.dP_kPa:.3g} kPa "
-                f"{direction} the experimental envelope"
-            )
-            print(warning_msg)
-
-        if diag.heatflux_violation:
-            direction = (
-                "below" if diag.q_Wcm2 < diag.qmin_Wcm2 else "above"
-            )
-            warning_msg = (
-                f"[bounds]   Specified heat flux "
-                f"({diag.q_Wcm2:.3g} W/cm^2) is "
-                f"{diag.dq_Wcm2:.3g} W/cm^2 {direction} "
-                "the experimental envelope"
-            )
-            print(warning_msg)
-
-        if not diag.heatflux_violation and not diag.pressure_violation:
-            warning_msg = ("[bounds] User inputs are close, but outside "
-                           " detailed facility envelope")
-            print(warning_msg)
+        warning_msg = (
+            f"[bounds] Distance to experimental envelope: ({diag.dP_poly_kPa} kPa,"
+            f" {diag.dq_poly_Wcm2} W/cm^2)."
+        )
+        print(warning_msg)
 
         warning_msg = ("[bounds] The envelope and this input can be inspected with:\n"
                        "           python tools/plot-px-envelope.py "
