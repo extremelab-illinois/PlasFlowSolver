@@ -465,9 +465,10 @@ def contains(db: Dict[str, GasPolygon], gas: str, P_Pa: float, q_W_m2: float,
     return point_in_polygon((P_Pa, q_W_m2), g.vertices, eps)
 
 
-def check_ptx_envelope(path, plasma_gas, P_stag, q_target):
+def check_ptx_envelope(path, plasma_gas, P_stag, q_target, debug=False):
     warnings = []
     PTXBounds = None
+
     try:
         # Needs to handle unit mismatch
         PTXBounds = load_bounds_csv(path)
@@ -502,11 +503,15 @@ def check_ptx_envelope(path, plasma_gas, P_stag, q_target):
     if diag.inside_polygon:
         print("[bounds] Inputs are within facility testing envelope")
     else:
-        warning_msg = (f"[bounds] WARNING: ({pstag:.3g} [kPa], "
-                       f"{qtarg:.3g} [W/cm^2]) "
-                       f"for '{plasma_gas}' is outside PTX tested envelope for "
-                       f"'{facility_gas}'"
-                       )
+        if debug:
+            warning_msg = (f"[bounds] WARNING: ({pstag:.3g} [kPa], "
+                           f"{qtarg:.3g} [W/cm^2]) "
+                           f"for '{plasma_gas}' is outside PTX tested envelope for "
+                           f"'{facility_gas}'"
+                           )
+        else:
+            warning_msg = ("[bounds] WARNING: Case is outside the PTX tested "
+                           f"envelope for '{facility_gas}'")
         warnings.append(warning_msg)
         print(warning_msg)
 
