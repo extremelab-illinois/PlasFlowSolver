@@ -53,7 +53,8 @@ import IO_operations.write_output as write_output  # Module to write the output 
 import utils.database_manager as database_manager_file  # Module to manage the database
 from utils.exit_program import exit_program, clean_files  # Module to kill the program and kill the temporary files
 from utils.mpp_memory_fixer import fix_mpp_memory_leak  # Module to fix Mutation++ memory leak (if any, due to Python wrapper)
-from utils.classes import ProgramConstants
+from utils.classes import ProgramConstants # Module with program constants
+from utils.facility_bounds import check_ptx_envelope  # Module for checking inputs against PTX envelope
 #.................................................
 # PROGRAM CONSTANTS:
 program_constants = ProgramConstants()  # Program constants object
@@ -147,12 +148,19 @@ while (n_case < n_lines):  # Loop through all the cases
     P_stag = inputs_object.P_stag
     q_target = inputs_object.q_target
     mixture_name = inputs_object.mixture_name
+
     # Print the data for the current case
     print("Comment: " + comment)
     print("Static pressure: " + str(P) + " Pa")
     print("Stagnation pressure: " + str(P_stag) + " Pa")
     print("Target heat flux: " + str(q_target) + " W/m^2")
     print("Mixture name: " + mixture_name)
+
+    # Check if inputs fall inside PTX envelope
+    ptx_bounds_warnings = check_ptx_envelope(program_constants.PTXBounds.BOUNDS_CSV_FILE,
+                                             mixture_name, P_stag, q_target)
+    warnings.extend(ptx_bounds_warnings)
+
     # Premilimary operation:
     if (probes_object.barker_type == 0):
         n_eq = 3 
@@ -290,6 +298,7 @@ while (n_case < n_lines):  # Loop through all the cases
     if (bad_hf):
         print("The heat flux did not converge in the last iteration. The case did not converge.")
         has_converged = False
+        warnings.append("Heat flux did not converge")
     # Check if an error occurred during the computation:
     if (exit_due_error == True and program_mode != 1):  # If we are not in single run
         # The case will be skipped
@@ -320,6 +329,14 @@ while (n_case < n_lines):  # Loop through all the cases
     else:
         has_converged_out.append("no")
         print("Iteration has not converged.")
+
+    # Check if computed Mach number violates the subsonic hypothesis
+    if (M >= 1.):
+        warning_msg = (f"WARNING: Output freestream Mach number ({M}) violates " 
+                       "subsonic model assumptions")
+        print(warning_msg)
+        warnings.append(warning_msg)
+
     (
         rho_out, T_out, h_out, u_out, a_out, M_out, T_t_out, h_t_out, P_t_out,
         Re_out, Kn_out, warnings_out, res_out

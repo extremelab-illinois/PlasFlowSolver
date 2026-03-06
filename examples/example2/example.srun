@@ -1,0 +1,33 @@
+INPUTS:
+comment = Example
+P [kPa] = 25e0
+P_dyn [kPa] = 1.8e-1
+P_stag [kPa] =
+q_target [W/cm^2] = 100.6e0
+plasma_gas = air_11
+INITIAL CONDITIONS:
+ic_db_name = db_air_11.h5
+T_0 [K] = 4000
+T_t_0 [K] = 5000
+u_0 [m/s] = 600
+P_t_0 [kPa] = 0
+PROBE PROPERTIES:
+T_w [K] = 400
+R_p [mm] = 4e0
+R_m [mm] = 10.1e0
+R_j [mm] = 50e0
+stag_type = flat
+hf_law = exact
+barker_type = none
+PROGRAM SETTINGS:
+N_p = 500
+max_hf_iter = 100
+hf_conv = 1e-6
+use_prev_ite = yes
+eta_max = 8
+log_warning_hf = yes
+newton_conv = 1e-8
+max_newton_iter = 30
+jac_diff = 1e-2
+min_T_relax [K] = 400
+max_T_relax [K] = 18000
