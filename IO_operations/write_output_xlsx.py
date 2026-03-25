@@ -59,6 +59,7 @@ def write_output_xlsx(output_filename, out_obj):
     res_out = out_obj.res_out  # Final convergence criteria
     species_names_out = out_obj.species_names_out  # Names of the species (dictionary)
     species_Y_out = out_obj.species_Y_out  # Mass fractions of the species (dictionary)
+    species_units = " [kg/kg]"  # Units for species mass fractions output
 
     # Rebuild the input file name:
     input_filename = output_filename[:-9] + ".xlsx"
@@ -137,14 +138,14 @@ def write_output_xlsx(output_filename, out_obj):
         if (c_species_names is None) or (c_species_Y is None):
             continue
         for j in range(len(c_species_names)):
-            c_species_name = c_species_names[j]
-            if ("Output", c_species_name) not in df.columns:
+            species_col_name = c_species_names[j] + species_units
+            if ("Output", species_col_name) not in df.columns:
                 n_col = len(df.columns)
-                df.insert(n_col, ("Output", c_species_name), pd.NA, False)
+                df.insert(n_col, ("Output", species_col_name), pd.NA, False)
         for j in range(len(c_species_names)):
-            c_species_name = c_species_names[j]
+            species_col_name = c_species_names[j] + species_units
             c_species_Y_value = c_species_Y[j]
-            df.loc[i - 1, ("Output", c_species_name)] = c_species_Y_value
+            df.loc[i - 1, ("Output", species_col_name)] = c_species_Y_value
 
     # Warnings
     n_col = len(df.columns)

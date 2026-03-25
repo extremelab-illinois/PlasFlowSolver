@@ -72,7 +72,7 @@ def write_output_srun(output_filename, out_obj):
     file.write("P_t_out: " + str(P_t_out[0]/P_CF) + " kPa\n")  # From Pa to kPa
     file.write("Re_out: " + str(Re_out[0]) + "\n")
     file.write("Kn_out: " + str(Kn_out[0]) + "\n")
-    file.write("Species mass fraction composition:\n")
+    file.write("Species mass fraction composition [kg/kg]:\n")
     for i in range(len(species_names_out)):
         file.write(species_names_out[i] + ": " + str(species_Y_out[i]) + "\n")
     file.write("warnings_out: " + str(warnings_out[0]) + "\n")
